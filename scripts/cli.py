@@ -9,10 +9,13 @@ Prerequisites:
 Add the two files to the root of the repository.
 
 Usage:
-    python cli.py [options]
+    python scripts/cli.py [options]
 
-For help:
-    python cli.py --help
+Examples:
+    python scripts/cli.py --text "Bonjour le monde!" --lang "fr-fr" --speed 1.2 --voice "bf_isabella"
+
+For more information, use:
+    python scripts/cli.py --help
 """
 
 import argparse
