@@ -1,22 +1,57 @@
 import re
-
-import espeakng_loader
 import phonemizer
 from phonemizer.backend.espeak.wrapper import EspeakWrapper
-
-from .config import MAX_PHONEME_LENGTH, VOCAB
+import espeakng_loader
+from .config import MAX_PHONEME_LENGTH, VOCAB, EspeakConfig
+from .log import log
+import ctypes
+import platform
+import sys
+import os
 
 
 class Tokenizer:
-    def __init__(self, espeak_data_path: str = None):
-        if not espeak_data_path:
-            espeak_data_path = espeakng_loader.get_data_path()
-        EspeakWrapper.set_library(espeakng_loader.get_library_path())
-        EspeakWrapper.set_data_path(espeak_data_path)
+    def __init__(self, espeak_config: EspeakConfig | None = None):
+        if not espeak_config:
+            espeak_config = EspeakConfig()
+        if not espeak_config.data_path:
+            espeak_config.data_path = espeakng_loader.get_data_path()
+        if not espeak_config.lib_path:
+            espeak_config.lib_path = espeakng_loader.get_library_path()
+
+        # Check if PHONEMIZER_ESPEAK_LIBRARY was set
+        if os.getenv("PHONEMIZER_ESPEAK_LIBRARY"):
+            espeak_config.lib_path = os.getenv("PHONEMIZER_ESPEAK_LIBRARY")
+
+        # Check that the espeak-ng library can be loaded
+        try:
+            ctypes.cdll.LoadLibrary(espeak_config.lib_path)
+        except Exception as e:
+            log.error(f"Failed to load espeak shared library: {e}")
+            log.warning("Falling back to system wide espeak-ng library")
+
+            # Fallback system wide load
+            error_info = (
+                "Failed to load espeak-ng from fallback. Please install espeak-ng system wide.\n"
+                "\tSee https://github.com/espeak-ng/espeak-ng/blob/master/docs/guide.md\n"
+                "\tNote: you can specify shared library path using PHONEMIZER_ESPEAK_LIBRARY environment variable.\n"
+                f"Environment:\n\t{platform.platform()} ({platform.release()}) | {sys.version}"
+            )
+            espeak_config.lib_path = ctypes.util.find_library(
+                "espeak-ng"
+            ) or ctypes.util.find_library("espeak")
+            if not espeak_config.lib_path:
+                raise RuntimeError(error_info)
+            try:
+                ctypes.cdll.LoadLibrary(espeak_config.lib_path)
+            except Exception as e:
+                raise RuntimeError(f"{e}: {error_info}")
+
+        EspeakWrapper.set_data_path(espeak_config.data_path)
+        EspeakWrapper.set_library(espeak_config.lib_path)
 
     @staticmethod
     def split_num(num):
-        # https://github.com/espeak-ng/espeak-ng/issues/484
         num = num.group()
         if "." in num:
             return num
@@ -59,12 +94,12 @@ class Tokenizer:
         return f"{b} {bill}{s} and {c} {coins}"
 
     @staticmethod
-    def point_num(num):
+    def point_num(num) -> str:
         a, b = num.group().split(".")
         return " point ".join([a, " ".join(b)])
 
     @staticmethod
-    def normalize_text(text):
+    def normalize_text(text) -> str:
         # remove leading and trailing whitespace and empty lines
         text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
         # replace curly quotes with straight quotes
@@ -118,7 +153,7 @@ class Tokenizer:
             )
         return [i for i in map(VOCAB.get, phonemes) if i is not None]
 
-    def phonemize(self, text, lang="en-us", norm=True):
+    def phonemize(self, text, lang="en-us", norm=True) -> str:
         """
         lang can be 'en-us' or 'en-gb'
         """

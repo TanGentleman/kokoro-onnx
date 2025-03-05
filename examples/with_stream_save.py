@@ -1,17 +1,15 @@
 """
-Note: on Linux you need to run this as well: apt-get install portaudio19-dev
-
-pip install -U kokoro-onnx sounddevice
+pip install -U kokoro-onnx soundfile
 
 wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
 wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
-python examples/with_stream.py
+python examples/with_stream_save.py
 """
 
-import sounddevice as sd
-from kokoro_onnx import Kokoro
 import asyncio
 
+import soundfile as sf
+from kokoro_onnx import Kokoro, SAMPLE_RATE
 
 text = """
 We've just been hearing from Matthew Cappucci, a senior meteorologist at the weather app MyRadar, who says Kansas City is seeing its heaviest snow in 32 years - with more than a foot (30 to 40cm) having come down so far.
@@ -36,12 +34,12 @@ async def main():
         lang="en-us",
     )
 
-    count = 0
-    async for samples, sample_rate in stream:
-        count += 1
-        print(f"Playing audio stream ({count})...")
-        sd.play(samples, sample_rate)
-        sd.wait()
+    with sf.SoundFile("audio.wav", mode="w", samplerate=SAMPLE_RATE, channels=1) as f:
+        count = 0
+        async for samples, sample_rate in stream:
+            count += 1
+            print(f"Writing chunk {count} of audio stream...")
+            f.write(samples)
 
 
 asyncio.run(main())
